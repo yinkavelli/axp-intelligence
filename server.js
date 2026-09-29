@@ -16,6 +16,14 @@ try {
   }
 } catch { /* no .env, fine */ }
 
+// Common mistake: key pasted into .env.example (never read, and it's committed to git)
+try {
+  const ex = fs.readFileSync(path.join(__dirname, '.env.example'), 'utf8');
+  if (!process.env.ANTHROPIC_API_KEY && /^ANTHROPIC_API_KEY=\S+/m.test(ex)) {
+    console.warn('\n  ⚠  An API key is in .env.example, which is NOT read (and is tracked by git).\n     Move it to a file named .env, blank it in .env.example, and restart.\n');
+  }
+} catch { /* ignore */ }
+
 const PORT = Number(process.env.PORT) || 3000;
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
