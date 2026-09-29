@@ -99,18 +99,21 @@
     <div class="cmd-head">
       <h2 class="label">Brief the Council</h2>
       <div class="cmd-opts">
-        <label class="file-btn ghost">Load file<input type="file" id="file" accept=".txt,.md,.markdown,.csv,.json,.html" hidden></label>
+        <label class="file-btn ghost">Attach file<input type="file" id="file" accept=".pdf,application/pdf,.txt,.md,.markdown,.csv,.json,.html" multiple hidden></label>
         <label class="rounds-pick">Rounds
           <select id="roundsSel"><option>4</option><option>5</option><option>6</option><option>8</option></select>
         </label>
       </div>
     </div>
     <div class="cmd-body">
-      <textarea id="doc" placeholder="Paste the document you want critiqued: a proposal, email, contract clause, pitch, policy…" spellcheck="false"></textarea>
+      <div class="cmd-main">
+      <textarea id="doc" placeholder="Paste the document you want critiqued, or attach a PDF deck. If your brief mentions an attachment, attach it first: the council will not convene without it." spellcheck="false"></textarea>
+      <div class="attachments" id="attachments"></div>
+      </div>
       <div class="cmd-side">
         <input id="focus" type="text" maxlength="300" placeholder="Optional focus (e.g. “make it more persuasive for a CFO”)">
         <button class="go" id="go"><span>CONVENE COUNCIL</span></button>
-        <div class="hint" id="hint">Minimum 4 rounds. Each round: 4 specialists → orchestrator.</div>
+        <div class="hint" id="hint">Minimum 4 rounds. PDFs (3 max, 15 MB each) are read once, then the council works from a digest. Drag and drop works too.</div>
       </div>
     </div>
   </section>

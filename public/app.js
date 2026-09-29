@@ -7,6 +7,8 @@ let agents = [];
 let lastReport = '';
 let sessions = 0;
 let running = false;
+let attachments = []; // PDFs: { name, size, data(base64) }
+const MAX_PDFS = 3, MAX_PDF_BYTES = 15_000_000, MAX_TOTAL = 20_000_000;
 const spark = Array.from({ length: 40 }, () => 20);
 
 /* ---------- Clock + telemetry sparkline ---------- */
@@ -114,6 +116,20 @@ function md(src) {
 /* ---------- Council run ---------- */
 function handle(ev) {
   switch (ev.type) {
+    case 'preflight_start':
+      setCore('···', 'PREFLIGHT', true); status('Preflight: checking the brief for missing material…'); break;
+    case 'preflight_ok':
+      status('Preflight passed.'); break;
+    case 'preflight_blocked':
+      setCore('!', 'NEEDS INPUT', false);
+      status('Council not convened. No tokens spent on the review.');
+      feed('warn', 'Preflight · not convened', ev.message + (ev.missing?.length ? '\n\nMissing:\n' + ev.missing.map((m) => '• ' + m).join('\n') : ''));
+      break;
+    case 'intake_start':
+      setCore('···', 'INTAKE', true); status(`Intake: reading ${ev.files.length} PDF${ev.files.length > 1 ? 's' : ''} once into a digest…`);
+      feed('sys', 'Intake', `Reading: ${ev.files.join(', ')}`); break;
+    case 'intake_done':
+      feed('sys', 'Intake complete', `Digest ready (~${ev.words} words). The council will work from this instead of re-reading the PDF.\n\n${ev.preview}${ev.words > 90 ? '…' : ''}`); break;
     case 'start':
       agents = ev.agents; renderNodes(); buildRounds(ev.rounds);
       feed('sys', 'System', `Council convened: ${ev.rounds} rounds, ${agents.length} specialists (${ev.mode} mode).`);
@@ -157,15 +173,19 @@ function handle(ev) {
 
 async function run() {
   const document_ = $('#doc').value.trim();
-  if (document_.length < 20) { status('Paste a document first (at least 20 characters).'); $('#doc').focus(); return; }
+  if (document_.length < 20 && !attachments.length) { status('Paste a document or attach a PDF first.'); $('#doc').focus(); return; }
   if (running) return;
   running = true; $('#go').disabled = true; $('#go span').textContent = 'COUNCIL IN SESSION…';
   $('#viewReport').classList.add('hidden'); $('#feed').innerHTML = ''; setGauge(0); setCore('0', 'INITIATING', true);
+  buildRounds(Number($('#roundsSel').value)); agents.forEach((a) => setNode(a.id, 'idle'));
   sessions++; $('#tSessions').textContent = sessions;
   try {
     const res = await fetch('/api/council', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ document: document_, rounds: Number($('#roundsSel').value), focus: $('#focus').value }),
+      body: JSON.stringify({
+        document: document_, rounds: Number($('#roundsSel').value), focus: $('#focus').value,
+        attachments: attachments.map((a) => ({ name: a.name, mediaType: 'application/pdf', data: a.data })),
+      }),
     });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Server error ${res.status}`);
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
@@ -199,11 +219,42 @@ $('#dlBtn').onclick = () => {
 /* ---------- Wiring ---------- */
 $('#go').onclick = run;
 $('#doc').addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') run(); });
-$('#file').addEventListener('change', async (e) => {
-  const f = e.target.files[0]; if (!f) return;
-  if (f.size > 900_000) { status('File too large (900KB max).'); return; }
-  $('#doc').value = await f.text(); status(`Loaded ${f.name}.`);
+function renderAttachments() {
+  $('#attachments').innerHTML = attachments.map((a, i) =>
+    `<div class="att"><span title="${esc(a.name)}">📄 ${esc(a.name)}</span><small>${(a.size / 1e6).toFixed(1)} MB</small><button data-i="${i}" aria-label="Remove ${esc(a.name)}">×</button></div>`).join('');
+}
+$('#attachments').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-i]'); if (!b) return;
+  attachments.splice(Number(b.dataset.i), 1); renderAttachments();
 });
+const toBase64 = (f) => new Promise((res, rej) => {
+  const r = new FileReader();
+  r.onload = () => res(String(r.result).split(',')[1]);
+  r.onerror = () => rej(r.error);
+  r.readAsDataURL(f);
+});
+async function addFiles(files) {
+  for (const f of files) {
+    const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+    if (isPdf) {
+      const total = attachments.reduce((n, a) => n + a.size, 0) + f.size;
+      if (attachments.length >= MAX_PDFS) { status(`Attach at most ${MAX_PDFS} PDFs.`); continue; }
+      if (f.size > MAX_PDF_BYTES) { status(`"${f.name}" is over 15 MB. Split it or export a smaller PDF.`); continue; }
+      if (total > MAX_TOTAL) { status('PDFs total more than 20 MB.'); continue; }
+      if (attachments.some((a) => a.name === f.name && a.size === f.size)) continue;
+      try { attachments.push({ name: f.name, size: f.size, data: await toBase64(f) }); status(`Attached ${f.name}.`); }
+      catch { status(`Could not read ${f.name}.`); }
+    } else {
+      if (f.size > 900_000) { status(`"${f.name}" is too large (900KB max for text files).`); continue; }
+      $('#doc').value = await f.text(); status(`Loaded ${f.name} as text.`);
+    }
+  }
+  renderAttachments();
+}
+$('#file').addEventListener('change', async (e) => { await addFiles([...e.target.files]); e.target.value = ''; });
+['dragenter', 'dragover'].forEach((t) => $('#command').addEventListener(t, (e) => { e.preventDefault(); $('#command').classList.add('drag'); }));
+['dragleave', 'drop'].forEach((t) => $('#command').addEventListener(t, (e) => { e.preventDefault(); if (t === 'drop' || e.target === $('#command')) $('#command').classList.remove('drag'); }));
+$('#command').addEventListener('drop', (e) => addFiles([...(e.dataTransfer?.files || [])]));
 
 (async function init() {
   buildLinks();

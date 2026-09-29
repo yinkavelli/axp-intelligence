@@ -29,14 +29,16 @@ const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json',
 };
-const MAX_BODY = 1_000_000; // ~1MB of document text
+const MAX_BODY = 30_000_000; // text + base64 PDFs (Anthropic's request limit is 32MB)
+const MAX_PDFS = 3;
+const MAX_PDF_BYTES = 15_000_000, MAX_TOTAL_PDF_BYTES = 20_000_000;
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let size = 0; const chunks = [];
     req.on('data', (c) => {
       size += c.length;
-      if (size > MAX_BODY) { reject(new Error('Document too large (1MB max)')); req.destroy(); return; }
+      if (size > MAX_BODY) { reject(new Error('Upload too large (30MB max)')); req.destroy(); return; }
       chunks.push(c);
     });
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
@@ -63,11 +65,24 @@ const server = http.createServer(async (req, res) => {
     catch (e) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: e.message })); return; }
 
     const document = String(payload.document || '').trim();
-    if (document.length < 20) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Provide a document of at least 20 characters.' }));
-      return;
+    const bad = (msg) => { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: msg })); };
+
+    // Validate PDF attachments: count, size and real PDF signature (never trust the filename)
+    const rawAtt = Array.isArray(payload.attachments) ? payload.attachments : [];
+    if (rawAtt.length > MAX_PDFS) { bad(`Attach at most ${MAX_PDFS} PDFs.`); return; }
+    const attachments = [];
+    let total = 0;
+    for (const a of rawAtt) {
+      const data = typeof a?.data === 'string' ? a.data.replace(/\s/g, '') : '';
+      const bytes = Math.floor(data.length * 0.75);
+      const name = String(a?.name || 'attachment.pdf').slice(0, 200);
+      if (!data || Buffer.from(data.slice(0, 16), 'base64').toString('latin1').indexOf('%PDF') !== 0) { bad(`"${name}" is not a valid PDF.`); return; }
+      if (bytes > MAX_PDF_BYTES) { bad(`"${name}" is larger than ${MAX_PDF_BYTES / 1e6} MB.`); return; }
+      total += bytes;
+      attachments.push({ name, data });
     }
+    if (total > MAX_TOTAL_PDF_BYTES) { bad(`PDFs total more than ${MAX_TOTAL_PDF_BYTES / 1e6} MB.`); return; }
+    if (document.length < 20 && attachments.length === 0) { bad('Provide a document (at least 20 characters) or attach a PDF.'); return; }
     const rounds = Math.min(8, Math.max(4, Number(payload.rounds) || 4)); // never fewer than 4
     const focus = String(payload.focus || '').slice(0, 1000);
 
@@ -80,7 +95,7 @@ const server = http.createServer(async (req, res) => {
     const emit = (type, data = {}) => { if (!aborted) res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`); };
 
     try {
-      await runCouncil({ document, rounds, focus, emit, isAborted: () => aborted });
+      await runCouncil({ document, attachments, rounds, focus, emit, isAborted: () => aborted });
     } catch (e) {
       console.error('[council]', e);
       emit('error', { message: e.message || 'Council failed' });

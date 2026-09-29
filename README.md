@@ -7,6 +7,15 @@ parallel. An Orchestrator merges their critiques into a revised draft, then the 
 rounds** (you can pick 4, 5, 6 or 8). After the last round the Orchestrator returns a final report with a
 verdict, key findings, remaining risks and the finished document. Progress streams live to the dashboard.
 
+## How a run works (and where tokens go)
+
+1. **Preflight**: a small, cheap model (Haiku) checks that the brief doesn't rely on material you didn't provide (for example "the attached deck" with nothing attached). If so, the run stops immediately and nothing else is spent.
+2. **Intake**: any PDFs (up to 3, 15 MB each) are read **once** into a text digest. Charts and images are described in words.
+3. **Council**: rounds of 4 specialists plus the Orchestrator work from the digest, so the PDF is never re-sent on every call.
+4. **Final report** from the Orchestrator.
+
+If you attach a PDF and paste no text, the PDF's content itself is what gets reviewed.
+
 ## Run
 
 ```bash
