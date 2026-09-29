@@ -3,7 +3,8 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runCouncil, AGENTS } from './council.js';
+import { runCouncil } from './council.js';
+import { loadConfig, validateConfig, keyStatus, agentList, modelSummary } from './config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, 'public');
@@ -19,8 +20,8 @@ try {
 // Common mistake: key pasted into .env.example (never read, and it's committed to git)
 try {
   const ex = fs.readFileSync(path.join(__dirname, '.env.example'), 'utf8');
-  if (!process.env.ANTHROPIC_API_KEY && /^ANTHROPIC_API_KEY=\S+/m.test(ex)) {
-    console.warn('\n  ⚠  An API key is in .env.example, which is NOT read (and is tracked by git).\n     Move it to a file named .env, blank it in .env.example, and restart.\n');
+  if (/^[A-Z0-9_]*API_KEY=\S+/m.test(ex)) {
+    console.warn('\n  ⚠  An API key is filled in inside .env.example, which is NOT read (and is tracked by git).\n     Move it to a file named .env, blank it in .env.example, and restart.\n');
   }
 } catch { /* ignore */ }
 
@@ -51,11 +52,18 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/api/status') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      mode: process.env.ANTHROPIC_API_KEY ? 'live' : 'demo',
-      model: process.env.AXP_MODEL || 'claude-sonnet-5-5',
-      agents: AGENTS.map(({ id, name, role }) => ({ id, name, role })),
-    }));
+    try {
+      const cfg = loadConfig();
+      const errs = validateConfig(cfg);
+      if (errs.length) { res.end(JSON.stringify({ mode: 'setup', configErrors: errs, agents: [] })); return; }
+      const keys = keyStatus(cfg);
+      const models = modelSummary(cfg);
+      res.end(JSON.stringify({
+        mode: !keys.anyKey ? 'demo' : keys.missing.length ? 'setup' : 'live',
+        missingKeys: keys.missing.map((m) => m.env), model: !keys.anyKey ? 'simulated' : models.label, models: models.ids,
+        agents: agentList(cfg),
+      }));
+    } catch (e) { res.end(JSON.stringify({ mode: 'setup', configErrors: [e.message], agents: [] })); }
     return;
   }
 
@@ -83,6 +91,18 @@ const server = http.createServer(async (req, res) => {
     }
     if (total > MAX_TOTAL_PDF_BYTES) { bad(`PDFs total more than ${MAX_TOTAL_PDF_BYTES / 1e6} MB.`); return; }
     if (document.length < 20 && attachments.length === 0) { bad('Provide a document (at least 20 characters) or attach a PDF.'); return; }
+    let cfg;
+    try {
+      cfg = loadConfig();
+      const errs = validateConfig(cfg);
+      if (errs.length) { bad('Config problem in config/council.json: ' + errs.join(' | ')); return; }
+    } catch (e) { bad(e.message); return; }
+    const keys = keyStatus(cfg);
+    if (keys.anyKey && keys.missing.length) {
+      bad('Missing API key: ' + keys.missing.map((m) => `${m.env} (provider "${m.provider}")`).join(', ') + '. Add it to .env, or point those agents at a provider you have a key for in config/council.json.');
+      return;
+    }
+    const demo = !keys.anyKey;
     const rounds = Math.min(8, Math.max(4, Number(payload.rounds) || 4)); // never fewer than 4
     const focus = String(payload.focus || '').slice(0, 1000);
 
@@ -95,7 +115,7 @@ const server = http.createServer(async (req, res) => {
     const emit = (type, data = {}) => { if (!aborted) res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`); };
 
     try {
-      await runCouncil({ document, attachments, rounds, focus, emit, isAborted: () => aborted });
+      await runCouncil({ cfg, demo, document, attachments, rounds, focus, emit, isAborted: () => aborted });
     } catch (e) {
       console.error('[council]', e);
       emit('error', { message: e.message || 'Council failed' });
@@ -120,7 +140,16 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  const live = !!process.env.ANTHROPIC_API_KEY;
+  let mode = 'DEMO (add an API key to .env for live agents)';
+  try {
+    const cfg = loadConfig(); const errs = validateConfig(cfg);
+    if (errs.length) mode = 'CONFIG PROBLEM: ' + errs.join(' | ');
+    else {
+      const k = keyStatus(cfg);
+      if (k.anyKey && k.missing.length) mode = 'SETUP NEEDED: missing ' + k.missing.map((m) => m.env).join(', ');
+      else if (k.anyKey) mode = 'LIVE (' + modelSummary(cfg).ids.join(', ') + ')';
+    }
+  } catch (e) { mode = 'CONFIG PROBLEM: ' + e.message; }
   console.log(`\n  AXP Intelligence online → http://localhost:${PORT}`);
-  console.log(`  Mode: ${live ? 'LIVE (' + (process.env.AXP_MODEL || 'claude-sonnet-5-5') + ')' : 'DEMO (set ANTHROPIC_API_KEY in .env for live agents)'}\n`);
+  console.log(`  Mode: ${mode}\n`);
 });

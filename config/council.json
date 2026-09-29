@@ -1,0 +1,55 @@
+{
+  "_help": "Edit this file to change models, providers and agents. No code changes or restart needed: it is re-read on every run. A model reference is either an alias from \"models\" (like \"main\") or \"provider:model-id\" (like \"openai:<model-id>\").",
+
+  "providers": {
+    "anthropic": {
+      "type": "anthropic",
+      "baseUrl": "https://api.anthropic.com",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "headersFromEnv": { "anthropic-workspace-id": "ANTHROPIC_WORKSPACE_ID" }
+    },
+    "openai": {
+      "type": "openai",
+      "baseUrl": "https://api.openai.com/v1",
+      "apiKeyEnv": "OPENAI_API_KEY",
+      "maxTokensParam": "max_completion_tokens"
+    }
+  },
+
+  "models": {
+    "fast": "anthropic:claude-haiku-4-5",
+    "main": { "use": "anthropic:claude-sonnet-5-5", "effort": "medium" }
+  },
+
+  "roles": {
+    "preflight": "fast",
+    "intake": "main",
+    "orchestrator": "main"
+  },
+
+  "agents": [
+    {
+      "id": "strategist", "name": "Strategist", "role": "Objectives & positioning", "color": "#4de1ff", "model": "main",
+      "system": "You are the Strategist on a business review council for Axinity Partners. Judge whether the document achieves its goal for its audience: clarity of the ask, positioning, value proposition, persuasiveness, and what is missing strategically."
+    },
+    {
+      "id": "skeptic", "name": "Skeptic", "role": "Red team & logic", "color": "#ff6b81", "model": "main",
+      "system": "You are the Skeptic on a business review council for Axinity Partners. Attack the document: find weak arguments, unsupported claims, logical gaps, unrealistic assumptions, and questions a hostile reader would raise."
+    },
+    {
+      "id": "editor", "name": "Editor", "role": "Clarity & tone", "color": "#8b7bff", "model": "main",
+      "system": "You are the Editor on a business review council for Axinity Partners. Judge structure, concision, tone, consistency and readability. Point to specific passages that should be cut, reordered or rewritten."
+    },
+    {
+      "id": "risk", "name": "Risk & Compliance", "role": "Legal, financial, reputation", "color": "#ffc857", "model": "main",
+      "system": "You are the Risk & Compliance officer on a business review council for Axinity Partners. Flag legal, financial, contractual, reputational and data-privacy exposure, risky commitments, missing caveats, and numbers or dates that need verification. You are not a lawyer; flag items for professional review."
+    }
+  ],
+
+  "pricing": {
+    "_help": "US dollars per 1 million tokens, used only for the cost estimate. Add your models here; unlisted models show tokens but no price.",
+    "claude-sonnet-5-5": { "in": 2, "out": 10 },
+    "claude-haiku-4-5": { "in": 1, "out": 5 },
+    "claude-opus-5-5": { "in": 4, "out": 20 }
+  }
+}

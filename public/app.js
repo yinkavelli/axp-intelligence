@@ -1,9 +1,9 @@
 // AXP Intelligence front end: no build step, no dependencies.
 const $ = (s) => document.querySelector(s);
-const COLORS = { strategist: '#4de1ff', skeptic: '#ff6b81', editor: '#8b7bff', risk: '#ffc857' };
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 let agents = [];
+const colorOf = (id) => agents.find((a) => a.id === id)?.color || '#4de1ff';
 let lastReport = '';
 let sessions = 0;
 let running = false;
@@ -54,18 +54,24 @@ setInterval(() => {
 })();
 
 /* ---------- Stage helpers ---------- */
-const NODE_POS = { strategist: [300, 36], skeptic: [564, 300], risk: [300, 564], editor: [36, 300] };
+const NODE_POS = [[300, 36], [564, 300], [300, 564], [36, 300]]; // top, right, bottom, left (clockwise)
 function buildLinks() {
-  $('#links').innerHTML = Object.entries(NODE_POS).map(([id, [x, y]]) =>
-    `<line class="link" id="link-${id}" x1="300" y1="300" x2="${x}" y2="${y}" style="--cx:${COLORS[id]}"/>`).join('');
+  $('#links').innerHTML = agents.map((a, i) =>
+    `<line class="link" id="link-${a.id}" x1="300" y1="300" x2="${NODE_POS[i][0]}" y2="${NODE_POS[i][1]}" style="--cx:${a.color}"/>`).join('');
 }
 function renderNodes() {
-  document.querySelectorAll('.node').forEach((n) => {
-    const a = agents.find((x) => x.id === n.dataset.agent);
+  document.querySelectorAll('.node').forEach((n, i) => {
+    const a = agents[i];
+    n.classList.toggle('hidden', !a);
     if (!a) return;
+    n.dataset.agent = a.id;
+    n.style.setProperty('--c', a.color);
     n.innerHTML = `<div class="n-name">${esc(a.name)}</div><div class="n-role">${esc(a.role)}</div>
+      <div class="n-model">${esc(a.model)}</div>
       <div class="n-state"><i></i><span>Idle</span></div><div class="n-score"></div>`;
   });
+  buildLinks();
+  $('#tAgents').textContent = agents.length || '—';
 }
 function setNode(id, state, score) {
   const n = document.querySelector(`.node[data-agent="${id}"]`); if (!n) return;
@@ -145,7 +151,7 @@ function handle(ev) {
     case 'agent_done': {
       setNode(ev.agent, 'done', ev.score);
       const a = agents.find((x) => x.id === ev.agent);
-      feed('agent', `${a?.name || ev.agent}${ev.score != null ? ' · ' + ev.score.toFixed(1) + '/10' : ''}`, ev.text, COLORS[ev.agent]);
+      feed('agent', `${a?.name || ev.agent}${ev.score != null ? ' · ' + ev.score.toFixed(1) + '/10' : ''}`, ev.text, colorOf(ev.agent));
       break;
     }
     case 'synth_start':
@@ -166,6 +172,15 @@ function handle(ev) {
       $('#viewReport').classList.remove('hidden');
       feed('orch', 'Orchestrator', 'Final report delivered.');
       showReport(); break;
+    case 'usage': {
+      const tok = ev.inTokens + ev.outTokens;
+      $('#tTokens').textContent = tok >= 1000 ? (tok / 1000).toFixed(1) + 'k' : String(tok);
+      $('#tCost').textContent = ev.unpriced.length && !ev.usd ? 'n/a' : (ev.usd < 0.01 ? '<$0.01' : '$' + ev.usd.toFixed(2)) + (ev.unpriced.length ? '+' : '');
+      feed('sys', 'Usage', `${ev.calls} calls · ${ev.inTokens.toLocaleString()} in / ${ev.outTokens.toLocaleString()} out tokens\n` +
+        ev.byModel.map((m) => `• ${m.model}: ${m.calls} calls, ${(m.in + m.out).toLocaleString()} tokens${m.usd == null ? ' (no price set)' : ' ≈ $' + m.usd.toFixed(3)}`).join('\n') +
+        (ev.usd != null ? '\nEstimate only. Prices come from config/council.json.' : ''));
+      break;
+    }
     case 'error':
       feed('err', 'Error', ev.message); status('Council interrupted: ' + ev.message); setCore('!', 'ERROR', false); break;
   }
@@ -257,14 +272,18 @@ $('#file').addEventListener('change', async (e) => { await addFiles([...e.target
 $('#command').addEventListener('drop', (e) => addFiles([...(e.dataTransfer?.files || [])]));
 
 (async function init() {
-  buildLinks();
   try {
     const s = await (await fetch('/api/status')).json();
-    agents = s.agents; renderNodes(); buildRounds(4);
-    $('#tModel').textContent = s.mode === 'live' ? s.model : 'simulated';
+    agents = s.agents || []; renderNodes(); buildRounds(4);
+    $('#tModel').textContent = s.model || '—';
+    if (s.models?.length > 1) $('#tModel').title = s.models.join('\n');
     const chip = $('#modeChip'); chip.classList.add(s.mode);
-    chip.querySelector('span').textContent = s.mode === 'live' ? 'LIVE · ONLINE' : 'DEMO MODE';
-    if (s.mode === 'demo') $('#hint').textContent = 'Demo mode: simulated council. Add ANTHROPIC_API_KEY to .env for real critique.';
+    chip.querySelector('span').textContent = { live: 'LIVE · ONLINE', demo: 'DEMO MODE', setup: 'CHECK SETUP' }[s.mode];
+    if (s.mode === 'demo') $('#hint').textContent = 'Demo mode: simulated council. Add your API key to .env for real critique.';
+    if (s.mode === 'setup') {
+      const why = s.configErrors ? 'Config problem: ' + s.configErrors.join(' | ') : 'Missing API key: ' + s.missingKeys.join(', ');
+      $('#hint').textContent = why; status(why);
+    }
   } catch {
     $('#modeChip span').textContent = 'OFFLINE';
   }

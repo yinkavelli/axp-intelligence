@@ -29,6 +29,7 @@ body{background:radial-gradient(1200px 700px at 50% 30%,#0a1426 0%,var(--bg) 70%
 .top-right{display:flex;gap:18px;align-items:center}
 .chip{display:flex;gap:8px;align-items:center;padding:6px 12px;border:1px solid var(--line);border-radius:999px;font:500 10.5px/1 var(--mono);letter-spacing:.16em;background:rgba(10,18,32,.6)}
 .chip.live .dot{background:var(--green);box-shadow:0 0 10px var(--green)}
+.chip.setup .dot{background:var(--red);box-shadow:0 0 10px var(--red)}
 .chip.demo .dot{background:var(--amber);box-shadow:0 0 10px var(--amber)}
 .clock{font-size:13px;color:var(--cyan);letter-spacing:.12em}
 
@@ -75,8 +76,6 @@ body{background:radial-gradient(1200px 700px at 50% 30%,#0a1426 0%,var(--bg) 70%
 /* Agent nodes */
 .node{position:absolute;width:132px;transform:translate(-50%,-50%);padding:10px 12px;border-radius:12px;background:rgba(9,16,30,.86);border:1px solid color-mix(in srgb,var(--c) 30%,transparent);text-align:center;transition:.3s;--c:#4de1ff}
 .n-top{left:50%;top:6%}.n-bottom{left:50%;top:94%}.n-left{left:6%;top:50%}.n-right{left:94%;top:50%}
-.node[data-agent=strategist]{--c:var(--c-strategist)}.node[data-agent=skeptic]{--c:var(--c-skeptic)}
-.node[data-agent=editor]{--c:var(--c-editor)}.node[data-agent=risk]{--c:var(--c-risk)}
 .node .n-name{font:600 11.5px/1.2 Inter,system-ui,sans-serif;color:var(--c);letter-spacing:.04em}
 .node .n-role{font-size:9.5px;color:var(--dim);margin-top:2px}
 .node .n-state{margin-top:7px;font:500 9px/1 var(--mono);letter-spacing:.16em;color:var(--dim);display:flex;align-items:center;justify-content:center;gap:6px;text-transform:uppercase}
@@ -86,6 +85,7 @@ body{background:radial-gradient(1200px 700px at 50% 30%,#0a1426 0%,var(--bg) 70%
 .node.thinking .n-state i{background:var(--c);animation:pulse 1s infinite}
 .node.done .n-state{color:var(--green)}
 .node.done .n-state i{background:var(--green)}
+.node .n-model{margin-top:5px;font:400 8.5px/1.2 var(--mono);color:#5d7290;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .node .n-score{font:500 15px/1 var(--mono);color:#fff;margin-top:6px;min-height:15px}
 
 .rounds{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center}

@@ -43,7 +43,9 @@
       <h2 class="label" style="margin-top:26px">Telemetry</h2>
       <div class="stat"><span>Model</span><b class="mono" id="tModel">—</b></div>
       <div class="stat"><span>Sessions today</span><b class="mono" id="tSessions">0</b></div>
-      <div class="stat"><span>Agents online</span><b class="mono" id="tAgents">4</b></div>
+      <div class="stat"><span>Last run tokens</span><b class="mono" id="tTokens">—</b></div>
+      <div class="stat"><span>Last run cost</span><b class="mono" id="tCost">—</b></div>
+      <div class="stat"><span>Agents online</span><b class="mono" id="tAgents">—</b></div>
       <div class="spark" aria-hidden="true"><svg viewBox="0 0 200 40" preserveAspectRatio="none"><polyline id="sparkLine" fill="none" stroke="var(--cyan)" stroke-width="1.5" points=""/></svg></div>
     </aside>
 
@@ -74,10 +76,10 @@
           </div>
         </div>
 
-        <div class="node n-top"    data-agent="strategist"></div>
-        <div class="node n-right"  data-agent="skeptic"></div>
-        <div class="node n-bottom" data-agent="risk"></div>
-        <div class="node n-left"   data-agent="editor"></div>
+        <div class="node n-top hidden"></div>
+        <div class="node n-right hidden"></div>
+        <div class="node n-bottom hidden"></div>
+        <div class="node n-left hidden"></div>
       </div>
 
       <div class="rounds" id="rounds" aria-label="Round progress"></div>
