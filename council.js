@@ -29,7 +29,11 @@ async function callClaude({ system, user, maxTokens = 1500 }) {
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      headers: {
+        'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json',
+        // Only needed when the key isn't scoped to a single workspace
+        ...(process.env.ANTHROPIC_WORKSPACE_ID ? { 'anthropic-workspace-id': process.env.ANTHROPIC_WORKSPACE_ID } : {}),
+      },
       body: JSON.stringify({ model: MODEL(), max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] }),
     });
     if (res.ok) {

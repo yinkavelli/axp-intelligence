@@ -17,6 +17,8 @@ npm start                 # http://localhost:3000
 No dependencies to install (Node 20+). Without an API key it runs in **demo mode** with a simulated council so
 you can explore the UI. Default model is `claude-sonnet-5-5`; override with `AXP_MODEL`.
 
+If you see `This API key is not scoped to a workspace`, set `ANTHROPIC_WORKSPACE_ID` in `.env` (or use a key created inside a specific workspace).
+
 ## Layout
 
 - `council.js`: agents, round loop, orchestrator, demo mode. Add or edit agents in the `AGENTS` array.
